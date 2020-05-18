@@ -4,6 +4,14 @@
 import pandas as pd
 import numpy as np
 
+from datetime import date, timedelta
+from time import strftime, gmtime
+
+import plotly.graph_objects as go
+
+from plotly.subplots import make_subplots
+from plotly.offline import plot
+
 # import COVID-19 world data
 df_covid_monde = pd.read_csv(
     'https://opendata.ecdc.europa.eu/' 'covid19/casedistribution/csv',
@@ -14,9 +22,6 @@ df_covid_monde = pd.read_csv(
 df_covid_monde.info()
 df_covid_monde.isnull().sum()
 
-from datetime import date, timedelta
-from time import strftime, gmtime
-
 today = date.today() - timedelta(2)
 date_of_today = (
     today.strftime('%Y-%m-%d') + '-' + strftime('%Hh%M', gmtime(60 * 60 * 19))
@@ -25,7 +30,7 @@ date_of_today = (
 uri = (
     f'https://static.data.gouv.fr/resources/'
     f'donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/'
-    f'20200513-190023/donnees-hospitalieres-etablissements-covid19-'
+    f'20200516-190022/donnees-hospitalieres-etablissements-covid19-'
     f'{date_of_today}'
     f'.csv'
 )
@@ -69,8 +74,9 @@ freq_covid_france_dep = (
     .rename(columns={'index': 'x'})
 )
 
-pie_values = freq_covid_france_dep.values.tolist()
-pie_labels = freq_covid_france_dep.index.tolist()
+# pie_values = freq_covid_france_dep.values.tolist()
+pie_values = freq_covid_france_dep['nb'].tolist()
+pie_labels = freq_covid_france_dep['dep'].tolist()
 
 list_of_countries = freq_covid_monde['countriesAndTerritories'].values.tolist()
 
@@ -78,18 +84,13 @@ list_of_dep = freq_covid_france_dep.index.tolist()
 
 freq_covid_monde['obs'] = np.arange(len(freq_covid_monde))
 
-import plotly.graph_objects as go
-
-from plotly.subplots import make_subplots
-from plotly.offline import plot
-
 # make a subplot
 fig = make_subplots(
     rows=2,
     cols=2,
     specs=[
-        [{'secondary_y': True, 'type': 'xy'}, {'secondary_y': False}],
-        [{'secondary_y': False}, {'type': 'domain'}],
+        [{'secondary_y': True, 'type': 'xy'}, {'secondary_y': True, 'type': 'xy'}],
+        [{'type': 'pie'}, {'type': 'domain'}],
     ],
     subplot_titles=[
         'Top 10 of coutries the most infected',
@@ -98,6 +99,7 @@ fig = make_subplots(
         'French deaths per department',
     ],
 )
+
 
 # 1st chart : add a bar chart
 fig.add_trace(
@@ -151,7 +153,7 @@ fig.add_trace(
     col=2,
     secondary_y=False,
 )
-
+#
 # fig.add_trace(
 #     go.Bar(
 #         x=freq_covid_france['dateRep'],
@@ -162,6 +164,7 @@ fig.add_trace(
 #     row=1,
 #     col=2,
 # )
+
 
 # add pie chart
 fig.add_trace(
@@ -176,6 +179,8 @@ fig.add_trace(
     col=2,
 )
 
+fig.show()
+plot(fig)
 
 # Add drowdowns
 button_layer_1_height = 1.35
@@ -207,15 +212,7 @@ fig.update_layout(
                     [
                         dict(
                             method='update',
-                            args=[
-                                {
-                                    'y': [
-                                        freq_covid_monde['cases'],
-                                        freq_covid_monde['deaths'],
-                                    ]
-                                },
-                                [[0], [5]],
-                            ],
+                            args=[{'visible': visibility}],
                             label='America',
                         ),
                         dict(
@@ -225,7 +222,9 @@ fig.update_layout(
                                     'y': [
                                         freq_covid_monde['cases'],
                                         freq_covid_monde['deaths'],
-                                    ]
+                                    ],
+                                    'x': [freq_covid_monde['countriesAndTerritories']],
+                                    'type': 'bar',
                                 },
                                 [[1], [2], [3], [4], [6], [8]],
                             ],
@@ -238,7 +237,9 @@ fig.update_layout(
                                     'y': [
                                         freq_covid_monde['cases'],
                                         freq_covid_monde['deaths'],
-                                    ]
+                                    ],
+                                    'x': [freq_covid_monde['countriesAndTerritories']],
+                                    'type': 'bar',
                                 },
                                 [[7], [9]],
                             ],
@@ -251,6 +252,57 @@ fig.update_layout(
                 type='dropdown',
                 direction='down',
                 x=0.25,
+                y=button_layer_1_height,
+                showactive=True,
+                pad={"r": 10, "t": 10},
+                font={'size': 10},
+                xanchor='left',
+                yanchor='top',
+                buttons=list(
+                    [
+                        dict(
+                            method='update',
+                            args=[
+                                {
+                                    'y': [freq_covid_france['deaths']],
+                                    'x': [freq_covid_france['dateRep']],
+                                    'type': 'bar',
+                                },
+                                [[4], [5], [10], [13], [14]],
+                            ],
+                            label='March',
+                        ),
+                        dict(
+                            method='update',
+                            args=[
+                                {
+                                    'y': [freq_covid_france['deaths']],
+                                    'x': [freq_covid_france['dateRep']],
+                                    'type': 'bar',
+                                },
+                                [[0], [1], [2], [3], [6], [7], [8], [11], [12]],
+                            ],
+                            label='April',
+                        ),
+                        dict(
+                            method='update',
+                            args=[
+                                {
+                                    'y': [freq_covid_france['deaths']],
+                                    'x': [freq_covid_france['dateRep']],
+                                    'type': 'bar',
+                                },
+                                [9],
+                            ],
+                            label='May',
+                        ),
+                    ],
+                ),
+            ),
+            dict(
+                type='dropdown',
+                direction='down',
+                x=0.45,
                 y=button_layer_1_height,
                 showactive=True,
                 pad={"r": 10, "t": 10},
@@ -285,8 +337,18 @@ fig.update_layout(
             yref='paper',
         ),
         dict(
-            text="List of<br>Departements",
+            text="List of<br>Countries",
             x=0.2,
+            y=1.27,
+            align="left",
+            showarrow=False,
+            font={'size': 10},
+            xref='paper',
+            yref='paper',
+        ),
+        dict(
+            text="List of<br>Departements",
+            x=0.4,
             y=1.27,
             align='left',
             showarrow=False,
