@@ -22,7 +22,7 @@ df_covid_monde = pd.read_csv(
 df_covid_monde.info()
 df_covid_monde.isnull().sum()
 
-today = date.today() - timedelta(2)
+today = date.today() - timedelta(1)
 date_of_today = (
     today.strftime('%Y-%m-%d') + '-' + strftime('%Hh%M', gmtime(60 * 60 * 19))
 )
@@ -30,7 +30,7 @@ date_of_today = (
 uri = (
     f'https://static.data.gouv.fr/resources/'
     f'donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/'
-    f'20200516-190022/donnees-hospitalieres-etablissements-covid19-'
+    f'20200518-190023/donnees-hospitalieres-etablissements-covid19-'
     f'{date_of_today}'
     f'.csv'
 )
@@ -54,7 +54,7 @@ freq_covid_monde = (
 
 df_covid_france = df_covid_monde[
     (df_covid_monde['countriesAndTerritories'] == 'France')
-]
+].sort_values(by=['year', 'month', 'day'], ascending=True)
 
 freq_covid_france = (
     df_covid_france.groupby(['dateRep', 'month'])[['cases', 'deaths']]
@@ -64,7 +64,14 @@ freq_covid_france = (
     .rename(columns={'index': 'x'})
 )
 
-df_covid_france = df_covid_france[['dateRep', 'month', 'deaths']]
+df_covid_france['death_pct'] = (
+    df_covid_france['deaths'] / df_covid_france['popData2018']
+)
+df_covid_france['cases_pct'] = df_covid_france['cases'] / df_covid_france['popData2018']
+
+
+df_covid_france['cum_death_pct'] = df_covid_france['death_pct'].cumsum()
+df_covid_france['cum_cases_pct'] = df_covid_france['cases_pct'].cumsum()
 
 freq_covid_france_dep = (
     df_covid_det_france.groupby('dep')['nb']
@@ -89,14 +96,14 @@ fig = make_subplots(
     rows=2,
     cols=2,
     specs=[
-        [{'secondary_y': True, 'type': 'xy'}, {'secondary_y': True, 'type': 'xy'}],
-        [{'type': 'pie'}, {'type': 'domain'}],
+        [{'secondary_y': True, 'type': 'xy'}, {'type': 'xy'}],
+        [{'type': 'xy'}, {'type': 'domain'}],
     ],
     subplot_titles=[
         'Top 10 of coutries the most infected',
-        'French deaths per day',
-        ' ',
-        'French deaths per department',
+        'Top 10 of french deaths/cases',
+        '% of cumulative cases / deaths',
+        'Top 10 of deaths per department',
     ],
 )
 
@@ -151,19 +158,42 @@ fig.add_trace(
     ),
     row=1,
     col=2,
-    secondary_y=False,
 )
-#
-# fig.add_trace(
-#     go.Bar(
-#         x=freq_covid_france['dateRep'],
-#         y=freq_covid_france['cases'],
-#         name='French cases',
-#         marker_color='lightsalmon',
-#     ),
-#     row=1,
-#     col=2,
-# )
+
+fig.add_trace(
+    go.Bar(
+        x=freq_covid_france['dateRep'],
+        y=freq_covid_france['cases'],
+        name='French cases',
+        marker_color='LightCoral',
+    ),
+    row=1,
+    col=2,
+),
+
+fig.add_trace(
+    go.Scatter(
+        x=df_covid_france['dateRep'],
+        y=df_covid_france['cum_death_pct'],
+        name='French cases',
+        mode='markers+lines',
+        marker_color='SandyBrown',
+    ),
+    row=2,
+    col=1,
+),
+
+fig.add_trace(
+    go.Scatter(
+        x=df_covid_france['dateRep'],
+        y=df_covid_france['cum_cases_pct'],
+        name='French cases',
+        mode='markers+lines',
+        marker_color='SteelBlue',
+    ),
+    row=2,
+    col=1,
+),
 
 
 # add pie chart
@@ -177,10 +207,7 @@ fig.add_trace(
     ),
     row=2,
     col=2,
-)
-
-fig.show()
-plot(fig)
+),
 
 # Add drowdowns
 button_layer_1_height = 1.35
@@ -194,7 +221,6 @@ fig.update_layout(
         'xanchor': 'center',
         'yanchor': 'top',
     },
-    # barmode='group',
     showlegend=False,
     updatemenus=list(
         [
@@ -212,7 +238,15 @@ fig.update_layout(
                     [
                         dict(
                             method='update',
-                            args=[{'visible': visibility}],
+                            args=[
+                                {
+                                    'y': [
+                                        freq_covid_monde['cases'],
+                                        freq_covid_monde['deaths'],
+                                    ],
+                                },
+                                [[0], [2]],
+                            ],
                             label='America',
                         ),
                         dict(
@@ -223,8 +257,7 @@ fig.update_layout(
                                         freq_covid_monde['cases'],
                                         freq_covid_monde['deaths'],
                                     ],
-                                    'x': [freq_covid_monde['countriesAndTerritories']],
-                                    'type': 'bar',
+                                    # 'x': [freq_covid_monde['countriesAndTerritories']],
                                 },
                                 [[1], [2], [3], [4], [6], [8]],
                             ],
@@ -238,8 +271,7 @@ fig.update_layout(
                                         freq_covid_monde['cases'],
                                         freq_covid_monde['deaths'],
                                     ],
-                                    'x': [freq_covid_monde['countriesAndTerritories']],
-                                    'type': 'bar',
+                                    # 'x': [freq_covid_monde['countriesAndTerritories']],
                                 },
                                 [[7], [9]],
                             ],
@@ -265,8 +297,7 @@ fig.update_layout(
                             args=[
                                 {
                                     'y': [freq_covid_france['deaths']],
-                                    'x': [freq_covid_france['dateRep']],
-                                    'type': 'bar',
+                                    # 'x': [freq_covid_france['dateRep']],
                                 },
                                 [[4], [5], [10], [13], [14]],
                             ],
@@ -277,8 +308,7 @@ fig.update_layout(
                             args=[
                                 {
                                     'y': [freq_covid_france['deaths']],
-                                    'x': [freq_covid_france['dateRep']],
-                                    'type': 'bar',
+                                    # 'x': [freq_covid_france['dateRep']],
                                 },
                                 [[0], [1], [2], [3], [6], [7], [8], [11], [12]],
                             ],
@@ -289,8 +319,7 @@ fig.update_layout(
                             args=[
                                 {
                                     'y': [freq_covid_france['deaths']],
-                                    'x': [freq_covid_france['dateRep']],
-                                    'type': 'bar',
+                                    # 'x': [freq_covid_france['dateRep']],
                                 },
                                 [9],
                             ],
@@ -299,27 +328,27 @@ fig.update_layout(
                     ],
                 ),
             ),
-            dict(
-                type='dropdown',
-                direction='down',
-                x=0.45,
-                y=button_layer_1_height,
-                showactive=True,
-                pad={"r": 10, "t": 10},
-                font={'size': 10},
-                xanchor='left',
-                yanchor='top',
-                active=-1,
-                buttons=list(
-                    [
-                        dict(
-                            method='update',
-                            args=['x', list_of_dep],
-                            label='List of French Departments',
-                        )
-                    ],
-                ),
-            ),
+            # dict(
+            #     type='dropdown',
+            #     direction='down',
+            #     x=0.45,
+            #     y=button_layer_1_height,
+            #     showactive=True,
+            #     pad={"r": 10, "t": 10},
+            #     font={'size': 10},
+            #     xanchor='left',
+            #     yanchor='top',
+            #     active=-1,
+            #     buttons=list(
+            #         [
+            #             dict(
+            #                 method='update',
+            #                 args=['x', list_of_dep],
+            #                 label='List of French Departments',
+            #             )
+            #         ],
+            #     ),
+            # ),
         ],
     ),
 )
