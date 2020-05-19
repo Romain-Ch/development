@@ -53,7 +53,7 @@ freq_covid_monde = (
 )
 
 df_covid_france = df_covid_monde[
-    (df_covid_monde['countriesAndTerritories'] == 'France')
+    (df_covid_monde['countriesAndTerritories'] == 'France') & (df_covid_monde['month'] >=3) & (df_covid_monde['year']> 2019)
 ].sort_values(by=['year', 'month', 'day'], ascending=True)
 
 freq_covid_france = (
@@ -72,6 +72,10 @@ df_covid_france['cases_pct'] = df_covid_france['cases'] / df_covid_france['popDa
 
 df_covid_france['cum_death_pct'] = df_covid_france['death_pct'].cumsum()
 df_covid_france['cum_cases_pct'] = df_covid_france['cases_pct'].cumsum()
+
+df_covid_france['cum_death'] = df_covid_france['deaths'].cumsum()
+df_covid_france['cum_cases'] = df_covid_france['cases'].cumsum()
+
 
 freq_covid_france_dep = (
     df_covid_det_france.groupby('dep')['nb']
@@ -151,8 +155,8 @@ fig.add_trace(
 # Add 2nd Chart : bar chart
 fig.add_trace(
     go.Bar(
-        x=freq_covid_france['dateRep'],
-        y=freq_covid_france['deaths'],
+        x=df_covid_france['dateRep'],
+        y=df_covid_france['cum_death'],
         name='French deaths',
         marker_color='crimson',
     ),
@@ -162,10 +166,10 @@ fig.add_trace(
 
 fig.add_trace(
     go.Bar(
-        x=freq_covid_france['dateRep'],
-        y=freq_covid_france['cases'],
+        x=df_covid_france['dateRep'],
+        y=df_covid_france['cum_cases'],
         name='French cases',
-        marker_color='LightCoral',
+        marker_color='thistle',
     ),
     row=1,
     col=2,
@@ -222,6 +226,7 @@ fig.update_layout(
         'yanchor': 'top',
     },
     showlegend=False,
+    barmode='stack',
     updatemenus=list(
         [
             dict(
