@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+### import packages
 import pandas as pd
 import numpy as np
 
@@ -12,17 +13,35 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from plotly.offline import plot
 
-# import COVID-19 world data
+import folium
+
+### import files
+
+# french geoloc data
+df_geocode = pd.read_csv(
+    'https://static.data.gouv.fr/resources/communes-de-france-base-des-codes-postaux/20200309-131459/communes-departement-region.csv',
+    sep=',',
+    usecols=[
+        'nom_commune_postal',
+        'code_postal',
+        'latitude',
+        'longitude',
+        'nom_commune',
+        'code_departement',
+        'nom_region',
+    ],
+)
+
+# test = pd.read_csv('https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv', sep=',')
+
+# COVID-19 world data
 df_covid_monde = pd.read_csv(
-    'https://opendata.ecdc.europa.eu/' 'covid19/casedistribution/csv',
+    'https://opendata.ecdc.europa.eu/covid19/casedistribution/csv',
     sep=',',
     parse_dates=True,
 )
 
-df_covid_monde.info()
-df_covid_monde.isnull().sum()
-
-today = date.today() - timedelta(1)
+today = date.today() - timedelta(4)
 date_of_today = (
     today.strftime('%Y-%m-%d') + '-' + strftime('%Hh%M', gmtime(60 * 60 * 19))
 )
@@ -30,7 +49,7 @@ date_of_today = (
 uri = (
     f'https://static.data.gouv.fr/resources/'
     f'donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/'
-    f'20200518-190023/donnees-hospitalieres-etablissements-covid19-'
+    f'20200519-190024/donnees-hospitalieres-etablissements-covid19-'
     f'{date_of_today}'
     f'.csv'
 )
@@ -38,10 +57,49 @@ uri = (
 # import COVID-19 french data
 df_covid_det_france = pd.read_csv(uri, sep=';', parse_dates=True)
 
-df_covid_det_france.isnull().sum()
-df_covid_det_france.info()
-df_covid_det_france.shape
 
+# Add 0 leading code postal and departement columns
+df_geocode['code_postal'] = df_geocode['code_postal'].apply(
+    lambda x: '{0:0>5}'.format(x)
+)
+df_geocode['code_departement'] = df_geocode['code_departement'].apply(
+    lambda x: '{0:0>2}'.format(x)
+)
+
+# mean of lattitude and longitude per department
+df_barycentre_geocode = (
+    df_geocode.groupby('code_departement')[['latitude', 'longitude']]
+    .mean()
+    .reset_index()
+    .rename(columns={'index': 'x'})
+)
+
+df_barycentre_geocode = df_barycentre_geocode.rename(
+    columns={'code_departement': 'dep'}
+)
+
+
+### merging
+
+df_covid_france_geoloc = pd.merge(
+    df_covid_det_france,
+    df_barycentre_geocode[['dep', 'latitude', 'longitude']],
+    on='dep',
+    how='inner',
+)
+
+### dataframe infos
+df_covid_monde.info()
+df_covid_monde.isnull().sum()
+
+df_covid_det_france.info()
+df_covid_det_france.isnull().sum()
+
+df_covid_france_geoloc.info()
+df_covid_france_geoloc.isnull().sum()
+
+
+### filter, aggregating / grouping columns
 freq_covid_monde = (
     df_covid_monde.groupby(['countriesAndTerritories', 'continentExp'])[
         ['cases', 'deaths']
@@ -52,8 +110,24 @@ freq_covid_monde = (
     .rename(columns={"index": "x"})
 )
 
+df_covid_monde2 = pd.merge(
+    df_covid_monde[(df_covid_monde['month'] >= 3) & (df_covid_monde['year'] > 2019)],
+    freq_covid_monde['countriesAndTerritories'],
+    on='countriesAndTerritories',
+    how='inner',
+).sort_values(by=['year', 'month', 'day'], ascending=True)
+
+freq_month_covid_monde = (
+    df_covid_monde2['month']
+    .value_counts()
+    .reset_index()
+    .rename(columns={'index': 'month'})
+)
+
 df_covid_france = df_covid_monde[
-    (df_covid_monde['countriesAndTerritories'] == 'France') & (df_covid_monde['month'] >=3) & (df_covid_monde['year']> 2019)
+    (df_covid_monde['countriesAndTerritories'] == 'France')
+    & (df_covid_monde['month'] >= 3)
+    & (df_covid_monde['year'] > 2019)
 ].sort_values(by=['year', 'month', 'day'], ascending=True)
 
 freq_covid_france = (
@@ -63,6 +137,29 @@ freq_covid_france = (
     .reset_index()
     .rename(columns={'index': 'x'})
 )
+
+freq_covid_france_dep = (
+    df_covid_det_france.groupby('dep')['nb']
+    .sum()
+    .sort_values(ascending=False)[0:10]
+    .reset_index()
+    .rename(columns={'index': 'x'})
+)
+
+
+# df_covid_monde2.groupby(['countriesAndTerritories', 'month'])['dateRep'].count()
+
+### cumulative percent
+df_covid_monde2['death_pct'] = (
+    df_covid_monde2['deaths'] / df_covid_monde2['popData2018']
+)
+df_covid_monde2['cases_pct'] = df_covid_monde2['cases'] / df_covid_monde2['popData2018']
+
+df_covid_monde2['cum_death'] = df_covid_monde2['deaths'].cumsum()
+df_covid_monde2['cum_cases'] = df_covid_monde2['cases'].cumsum()
+
+df_covid_monde2['cum_death_pct'] = df_covid_monde2['death_pct'].cumsum()
+df_covid_monde2['cum_cases_pct'] = df_covid_monde2['cases_pct'].cumsum()
 
 df_covid_france['death_pct'] = (
     df_covid_france['deaths'] / df_covid_france['popData2018']
@@ -77,14 +174,6 @@ df_covid_france['cum_death'] = df_covid_france['deaths'].cumsum()
 df_covid_france['cum_cases'] = df_covid_france['cases'].cumsum()
 
 
-freq_covid_france_dep = (
-    df_covid_det_france.groupby('dep')['nb']
-    .sum()
-    .sort_values(ascending=False)[0:10]
-    .reset_index()
-    .rename(columns={'index': 'x'})
-)
-
 # pie_values = freq_covid_france_dep.values.tolist()
 pie_values = freq_covid_france_dep['nb'].tolist()
 pie_labels = freq_covid_france_dep['dep'].tolist()
@@ -94,6 +183,61 @@ list_of_countries = freq_covid_monde['countriesAndTerritories'].values.tolist()
 list_of_dep = freq_covid_france_dep.index.tolist()
 
 freq_covid_monde['obs'] = np.arange(len(freq_covid_monde))
+
+# df_covid_france_geoloc.info()
+#
+# geocode = (df_covid_france_geoloc['latitude'], df_covid_france_geoloc['longitude'])
+# map = folium.Map(
+#     location=[df_covid_france_geoloc['latitude'], df_covid_france_geoloc['longitude']],
+#     zoom_start=12,
+# )
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from shapely.geometry import Point, Polygon
+
+# districts = gpd.read_file(
+#     "http://osm13.openstreetmap.fr/~cquest/openfla/export/regions-20180101-shp.zip",
+#     driver='Shapefile',
+#     usecols=['nom', 'surf_km2', 'geometry'],
+# )
+# fig, ax = plt.subplots(figsize=(15, 15))
+# districts.plot(ax=ax)
+# districts.info()
+# districts.head()
+#
+# districts.plot()
+
+# crs = {'init' :'epsg:4326'}
+# geometry = [
+#     Point(xy)
+#     for xy in zip(
+#         df_covid_france_geoloc['latitude'], df_covid_france_geoloc['longitude']
+#     )
+# ]
+#
+# df_geo = gpd.GeoDataFrame(df_covid_france_geoloc, crs=crs, geometry=geometry)
+# df_geo.head()
+
+# fig, ax = plt.subplots(figsize=(30,30))
+# districts.plot(ax = ax)
+# fig, ax = plt.subplots(figsize=(15,15))
+# df_geo.plot(ax=ax)
+
+for val in freq_covid_monde['countriesAndTerritories']:
+    print(
+        df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+            'cum_death_pct'
+        ].head()
+    )
+
+for val_month in df_covid_monde2.month.unique():
+    print(df_covid_monde2[df_covid_monde2['month'] == val_month].head())
+
+# for i in freq_covid_monde.index.countriesAndTerritories:
+#     print(freq_covid_monde['countriesAndTerritories'][i])
+
+# label = [val[i] for val, i in freq_covid_monde.countriesAndTerritories.index.tolist()]
 
 # make a subplot
 fig = make_subplots(
@@ -153,51 +297,63 @@ fig.add_trace(
 )
 
 # Add 2nd Chart : bar chart
-fig.add_trace(
-    go.Bar(
-        x=df_covid_france['dateRep'],
-        y=df_covid_france['cum_death'],
-        name='French deaths',
-        marker_color='crimson',
+for val in freq_covid_monde['countriesAndTerritories']:
+    fig.add_trace(
+        go.Bar(
+            x=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'dateRep'
+            ],
+            y=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'cum_death'
+            ],
+            name=val + ' deaths',
+        ),
+        row=1,
+        col=2,
+    )
+    fig.add_trace(
+        go.Bar(
+            x=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'dateRep'
+            ],
+            y=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'cum_cases'
+            ],
+            name=val + ' cases',
+        ),
+        row=1,
+        col=2,
     ),
-    row=1,
-    col=2,
-)
 
-fig.add_trace(
-    go.Bar(
-        x=df_covid_france['dateRep'],
-        y=df_covid_france['cum_cases'],
-        name='French cases',
-        marker_color='thistle',
+    fig.add_trace(
+        go.Scatter(
+            x=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'dateRep'
+            ],
+            y=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'cum_death_pct'
+            ],
+            name=val + ' Deaths',
+            mode='markers+lines',
+        ),
+        row=2,
+        col=1,
     ),
-    row=1,
-    col=2,
-),
 
-fig.add_trace(
-    go.Scatter(
-        x=df_covid_france['dateRep'],
-        y=df_covid_france['cum_death_pct'],
-        name='French cases',
-        mode='markers+lines',
-        marker_color='SandyBrown',
+    fig.add_trace(
+        go.Scatter(
+            x=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'dateRep'
+            ],
+            y=df_covid_monde2[df_covid_monde2['countriesAndTerritories'] == val][
+                'cum_cases_pct'
+            ],
+            name=val + ' Cases',
+            mode='markers+lines',
+        ),
+        row=2,
+        col=1,
     ),
-    row=2,
-    col=1,
-),
-
-fig.add_trace(
-    go.Scatter(
-        x=df_covid_france['dateRep'],
-        y=df_covid_france['cum_cases_pct'],
-        name='French cases',
-        mode='markers+lines',
-        marker_color='SteelBlue',
-    ),
-    row=2,
-    col=1,
-),
 
 
 # add pie chart
@@ -212,6 +368,7 @@ fig.add_trace(
     row=2,
     col=2,
 ),
+
 
 # Add drowdowns
 button_layer_1_height = 1.35
@@ -246,124 +403,111 @@ fig.update_layout(
                             args=[
                                 {
                                     'y': [
-                                        freq_covid_monde['cases'],
-                                        freq_covid_monde['deaths'],
+                                        freq_covid_monde[
+                                            'countriesAndTerritories'
+                                        ].values
                                     ],
                                 },
-                                [[0], [2]],
                             ],
-                            label='America',
-                        ),
-                        dict(
-                            method='update',
-                            args=[
-                                {
-                                    'y': [
-                                        freq_covid_monde['cases'],
-                                        freq_covid_monde['deaths'],
-                                    ],
-                                    # 'x': [freq_covid_monde['countriesAndTerritories']],
-                                },
-                                [[1], [2], [3], [4], [6], [8]],
-                            ],
-                            label='Europe',
-                        ),
-                        dict(
-                            method='update',
-                            args=[
-                                {
-                                    'y': [
-                                        freq_covid_monde['cases'],
-                                        freq_covid_monde['deaths'],
-                                    ],
-                                    # 'x': [freq_covid_monde['countriesAndTerritories']],
-                                },
-                                [[7], [9]],
-                            ],
-                            label='Asia',
+                            label='pays',
                         ),
                     ],
                 ),
             ),
-            dict(
-                type='dropdown',
-                direction='down',
-                x=0.25,
-                y=button_layer_1_height,
-                showactive=True,
-                pad={"r": 10, "t": 10},
-                font={'size': 10},
-                xanchor='left',
-                yanchor='top',
-                buttons=list(
-                    [
-                        dict(
-                            method='update',
-                            args=[
-                                {
-                                    'y': [freq_covid_france['deaths']],
-                                    # 'x': [freq_covid_france['dateRep']],
-                                },
-                                [[4], [5], [10], [13], [14]],
-                            ],
-                            label='March',
-                        ),
-                        dict(
-                            method='update',
-                            args=[
-                                {
-                                    'y': [freq_covid_france['deaths']],
-                                    # 'x': [freq_covid_france['dateRep']],
-                                },
-                                [[0], [1], [2], [3], [6], [7], [8], [11], [12]],
-                            ],
-                            label='April',
-                        ),
-                        dict(
-                            method='update',
-                            args=[
-                                {
-                                    'y': [freq_covid_france['deaths']],
-                                    # 'x': [freq_covid_france['dateRep']],
-                                },
-                                [9],
-                            ],
-                            label='May',
-                        ),
-                    ],
-                ),
-            ),
-            # dict(
-            #     type='dropdown',
-            #     direction='down',
-            #     x=0.45,
-            #     y=button_layer_1_height,
-            #     showactive=True,
-            #     pad={"r": 10, "t": 10},
-            #     font={'size': 10},
-            #     xanchor='left',
-            #     yanchor='top',
-            #     active=-1,
-            #     buttons=list(
-            #         [
-            #             dict(
-            #                 method='update',
-            #                 args=['x', list_of_dep],
-            #                 label='List of French Departments',
-            #             )
-            #         ],
-            #     ),
-            # ),
         ],
     ),
-)
+),
+
+
+# {
+#     'y': [
+#         df_covid_monde2[
+#             df_covid_monde2[
+#                 'countriesAndTerritories'
+#             ]
+#             == val_countries
+#         ]['cum_death'],
+#         df_covid_monde2[
+#             df_covid_monde2[
+#                 'countriesAndTerritories'
+#             ]
+#             == val_countries
+#         ]['cum_cases'],
+#     ],
+# },
+
+# dict(
+#     type='dropdown',
+#     direction='down',
+#     x=0.25,
+#     y=button_layer_1_height,
+#     showactive=True,
+#     pad={"r": 10, "t": 10},
+#     font={'size': 10},
+#     xanchor='left',
+#     yanchor='top',
+#     buttons=list(
+#         [
+#             dict(
+#                 method='update',
+#                 args=[
+#                     {
+#                         'y': [
+#                             df_covid_monde2[
+#                                 df_covid_monde2['month'] == val_month
+#                             ]['cum_death']
+#                             for val_month in df_covid_monde2.month.unique()
+#                         ],
+#                     },
+#                 ],
+#                 label='deaths',
+#             ),
+#             dict(
+#                 method='update',
+#                 args=[
+#                     {
+#                         'y': [
+#                             df_covid_monde2[
+#                                 df_covid_monde2['month'] == val_month
+#                             ]['cum_cases']
+#                             for val_month in df_covid_monde2.month.unique()
+#                         ],
+#                     },
+#                 ],
+#                 label='cases',
+#             ),
+#         ],
+#     ),
+# ),
+# dict(
+#     type='dropdown',
+#     direction='down',
+#     x=0.45,
+#     y=button_layer_1_height,
+#     showactive=True,
+#     pad={"r": 10, "t": 10},
+#     font={'size': 10},
+#     xanchor='left',
+#     yanchor='top',
+#     active=-1,
+#     buttons=list(
+#         [
+#             dict(
+#                 method='update',
+#                 args=['x', list_of_dep],
+#                 label='List of French Departments',
+#             )
+#         ],
+#     ),
+# ),
+
 
 fig.update_layout(
     annotations=[
         dict(
-            text="List of<br>Countries",
+            text="Continents",
             x=0,
-            y=1.27,
+            y=1.29,
             align="left",
             showarrow=False,
             font={'size': 10},
@@ -371,9 +515,9 @@ fig.update_layout(
             yref='paper',
         ),
         dict(
-            text="List of<br>Countries",
+            text="Type of data",
             x=0.2,
-            y=1.27,
+            y=1.29,
             align="left",
             showarrow=False,
             font={'size': 10},
@@ -383,14 +527,14 @@ fig.update_layout(
         dict(
             text="List of<br>Departements",
             x=0.4,
-            y=1.27,
+            y=1.29,
             align='left',
             showarrow=False,
             font={'size': 10},
             xref='paper',
             yref='paper',
         ),
-    ]
+    ],
 )
 
 
