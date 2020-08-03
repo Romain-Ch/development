@@ -467,4 +467,4 @@ def upd_bubble_chart(selected_indic, country_val):
 
 # Run the App
 if __name__ == '__main__':
-    app.run_server(debug=True, port=8000)
+    app.run_server(debug=True, port=80)
