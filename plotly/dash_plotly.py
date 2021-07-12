@@ -1,21 +1,30 @@
 #!/usr/bin/env python
 
 ### import packages
+import io
+import requests
 
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 
 
+
+# ignore certificate failed
+r = requests.get('https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv',
+                 verify=False)
+covid_monde=pd.read_csv(io.StringIO(r.content.decode('utf-8')),
+               parse_dates=True,
+               low_memory=False)
+
 # COVID-19 world data
-covid_monde = pd.read_csv(
-    'https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv',
-    parse_dates=True,
-    low_memory=False,
-)
+#df = pd.read_csv(
+#    'https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv',
+#    parse_dates=True,
+#    low_memory=False,
+#)
 
 covid_monde.continent.value_counts()
 
@@ -31,6 +40,7 @@ covid_location = covid_monde[covid_monde['location'] != 'World'].sort_values(
 )
 
 covid_location['continent'] = covid_location['continent'].str.lower()
+
 
 def top(ligne):
     val = ''
@@ -113,7 +123,9 @@ top_30_cases = pd.merge(
 
 covid_countries = (
     covid_location[covid_location['time'] > '2020-01-01']
-    .groupby(['location', 'iso_code', 'continent', 'month', 'abb_month'])[['new_cases', 'new_deaths']]
+    .groupby(['location', 'iso_code', 'continent', 'month', 'abb_month'])[
+        ['new_cases', 'new_deaths']
+    ]
     .sum()
     .reset_index()
 )
@@ -217,7 +229,6 @@ app.layout = html.Div(
                             marks={str(month): str(month) for month in months},
                             className='dcc_control',
                         ),
-
                         html.P('Select the continent', className='control_label'),
                         dcc.Dropdown(
                             id='continent-filter',
@@ -467,4 +478,4 @@ def upd_bubble_chart(selected_indic, country_val):
 
 # Run the App
 if __name__ == '__main__':
-    app.run_server(debug=True, port=8000)
+    app.run_server(debug=True, port=5000)
