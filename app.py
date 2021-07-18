@@ -161,9 +161,8 @@ case_death_pop["cases_per_pop"] = (
 
 # Initialize the App
 external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css"]
-# server = flask.Flask(__name__)  # define flask app.server
-# app = dash.Dash(__name__, external_stylesheets=external_stylesheets, server=server)
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+server = flask.Flask(__name__)  # define flask app.server
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, server=server)
 
 countries = top_30_cases["location"].unique()
 countries2 = agg_top_30["location"].unique()
