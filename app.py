@@ -2,6 +2,7 @@
 
 ### import packages
 import io
+import os
 
 import dash
 import dash_core_components as dcc
@@ -488,4 +489,4 @@ def upd_bubble_chart(selected_indic, country_val):
 
 # Run the App
 if __name__ == "__main__":
-    app.run_server(debug=False)
+    app.run_server(debug=False, port=os.getenv("PORT", 5000))
